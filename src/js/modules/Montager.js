@@ -1,45 +1,62 @@
-import PIXI from 'pixi';
+import pModel from 'clmtrackr/models/model_pca_20_svm';
+import { minBy } from 'lodash';
+import faceDeformer from './faceDeformer';
+import Blender from './Blender';
+import { getImageDataFromGL } from './Util';
 
 export default class Montager {
-  constructor(baseImageUrl, baseFaces) {
-    this.baseFaces = baseFaces;
-    this.image = new Image();
-    this.image.onload = this.init.bind(this);
-    this.image.src = baseImageUrl;
+  constructor() {
+    this.onLoadBaseImage = this.onLoadBaseImage.bind(this);
+    // マスクを描画するクラスをインスタンス化
+    this.fd = new faceDeformer();
+    this.canvas = document.querySelector('canvas');
   }
 
-  init() {
-    const renderer = PIXI.autoDetectRenderer(800, 600);
-    // document.body.appendChild(renderer.view);
-    const stage = new PIXI.Container();
-    const verticesX = this.faces.map(() => ());
-    var uvs = new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]);
-    var triangles = new Uint16Array([0, 1, 2, 3, 2, 1]);
-
-    var texture = PIXI.Texture.fromImage('res/ship.png');
-    var ship = new PIXI.mesh.Mesh(
-      texture,
-      verts, uvs, triangles,
-      PIXI.mesh.Mesh.DRAW_MODES.TRIANGLES);
-
-    var touchMove = function (event) {
-      // 矩形の右下の点を移動するテスト
-      verts[6] = event.data.global.x;
-      verts[7] = event.data.global.y;
-      ship.dirty = true;
-    };
-
-    ship.on("mousemove", touchMove);
-    ship.on("touchmove", touchMove);
-    ship.interactive = true;
-    stage.addChild(ship);
-
-    animate();
-
-    function animate() {
-      requestAnimationFrame(animate);
-
-      renderer.render(stage);
+  init(baseImageURL, baseFaces, faces, callback) {
+    this.baseFaces = baseFaces;
+    this.faces = faces;
+    this.callback = callback;
+    this.image = new Image();
+    this.image.onload = this.onLoadBaseImage;
+    this.image.src = baseImageURL;
+    if (this.image.width) {
+      this.onLoadBaseImage();
     }
+  }
+
+  onLoadBaseImage() {
+    this.canvas.width = this.image.width;
+    this.canvas.height = this.image.height;
+    this.fd.init(this.canvas);
+    this.draw();
+  }
+
+  draw() {
+    this.baseFaces.forEach((baseFace) => {
+      // 最も近い顔を選ぶ
+      const targetFace = minBy(
+        this.faces,
+        (face) => (baseFace.point.distance(face.point))
+      );
+      const faceImage = new Image();
+      faceImage.onload = () => {
+        this.fd.load(faceImage, targetFace.positions, pModel);
+        this.fd.draw(baseFace.absolutePositions);
+
+        // blend
+        getImageDataFromGL(
+          this.canvas,
+          baseFace.x, baseFace.y, baseFace.width, baseFace.height
+        ).then((imageData) => {
+          const blender = new Blender();
+          const distCanvas = blender.blend(baseFace.imageData, imageData);
+          document.querySelector('.dist').appendChild(distCanvas);
+          distCanvas.style.position = 'absolute';
+          distCanvas.style.top = `${baseFace.y}px`;
+          distCanvas.style.left = `${baseFace.x}px`;
+        });
+      };
+      faceImage.src = targetFace.imageURL;
+    });
   }
 }

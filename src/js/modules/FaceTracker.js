@@ -34,6 +34,8 @@ export default class FaceTracker {
       });
     });
 
+    this.featureTracker = new FeatureTracker();
+
     this.extractFaceImages(20);
     this.trackFaceFeature();
   }
@@ -41,10 +43,12 @@ export default class FaceTracker {
   /**
    * トラッキングを開始
    * @param {string} imageSelector
+   * @param {function} callback
    */
-  track(imageSelector) {
+  track(imageSelector, callback) {
     tracking.track(imageSelector, this.tracker);
     this.image = document.querySelector(imageSelector);
+    this.callback = callback;
   }
 
   extractFaceImages(margin = 0) {
@@ -69,7 +73,7 @@ export default class FaceTracker {
 
   trackFaceFeature(index = 0) {
     const face = this.faces[index];
-    const featureTracker = new FeatureTracker();
+    const featureTracker = this.featureTracker;
     featureTracker.track(face.imageURL).then((positions) => {
       Console((canvas, context) => {
         canvas.width = face.width;
@@ -82,6 +86,17 @@ export default class FaceTracker {
       // 再帰
       if (index < this.faces.length - 1) {
         this.trackFaceFeature(index + 1);
+      } else {
+        this.callback(this.faces);
+      }
+    }).catch(() => {
+      console.log('tracking fail');
+      this.faces.splice(index, 1);
+      // 再帰
+      if (index < this.faces.length) {
+        this.trackFaceFeature(index);
+      } else {
+        this.callback(this.faces);
       }
     });
   }

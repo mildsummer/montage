@@ -4,7 +4,6 @@ import { minBy, maxBy } from 'lodash';
 
 export default class FeatureTracker {
   constructor() {
-    this.onSuccess = this.onSuccess.bind(this);
     this.canvas = document.createElement('canvas');
     this.context = this.canvas.getContext('2d');
     this.ctracker = new clm.tracker({
@@ -17,7 +16,10 @@ export default class FeatureTracker {
   track(imageUrl) {
     const image = new Image();
     const { canvas, context, ctracker } = this;
-    return new Promise((resolve) => {
+    if (ctracker.getCurrentPosition()) {
+      ctracker.reset();
+    }
+    return new Promise((resolve, reject) => {
       image.onload = () => {
         const { width, height } = image;
         canvas.width = width;
@@ -25,23 +27,33 @@ export default class FeatureTracker {
         context.drawImage(image, 0, 0, width, height);
         ctracker.start(canvas);
       };
-      const onSuccess = () => {
+      let onSuccess = null;
+      let onFail = null;
+      onSuccess = () => {
         const positions = ctracker.getCurrentPosition();
         if (positions) {
           this.positions = positions;
           this.rect = this.getBoundingRect();
           ctracker.stop();
           document.removeEventListener('clmtrackrConverged', onSuccess);
+          document.removeEventListener('clmtrackrNotFound', onFail);
+          document.removeEventListener('clmtrackrNotFound', onFail);
           resolve(positions);
         }
       };
+      onFail = () => {
+        ctracker.stop();
+        document.removeEventListener('clmtrackrConverged', onSuccess);
+        document.removeEventListener('clmtrackrNotFound', onFail);
+        document.removeEventListener('clmtrackrNotFound', onFail);
+        reject();
+      };
       document.addEventListener('clmtrackrConverged', onSuccess, false);
+      document.addEventListener('clmtrackrNotFound', onFail, false);
+      document.addEventListener('clmtrackrNotFound', onFail, false);
       image.src = imageUrl;
       this.image = image;
     });
-  }
-
-  onSuccess() {
   }
 
   getRect(margin = 0) {

@@ -1,3 +1,5 @@
+import Point from './Point';
+
 export default class Face {
   constructor(canvas, x, y) {
     this.canvas = canvas;
@@ -8,9 +10,14 @@ export default class Face {
     this.height = canvas.height;
     this.x = x;
     this.y = y;
+    this.point = new Point(x, y);
   }
 
   setPositions(positions) {
     this.positions = positions;
+    this.absolutePositions = positions.map((position) => ([
+      position[0] + this.x,
+      position[1] + this.y
+    ]));
   }
 }
